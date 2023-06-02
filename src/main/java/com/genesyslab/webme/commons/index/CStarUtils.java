@@ -18,43 +18,20 @@ package com.genesyslab.webme.commons.index;
 import com.genesyslab.webme.commons.index.CellElement.CollectionValue;
 import com.genesyslab.webme.commons.index.config.IndexConfig;
 
-import org.apache.cassandra.config.CFMetaData;
-import org.apache.cassandra.config.ColumnDefinition;
+
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.CQL3Type;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.ReadCommand;
 import org.apache.cassandra.db.filter.RowFilter;
-import org.apache.cassandra.db.marshal.AbstractType;
-import org.apache.cassandra.db.marshal.AsciiType;
-import org.apache.cassandra.db.marshal.BooleanType;
-import org.apache.cassandra.db.marshal.BytesType;
-import org.apache.cassandra.db.marshal.CollectionType;
-import org.apache.cassandra.db.marshal.CompositeType;
-import org.apache.cassandra.db.marshal.CounterColumnType;
-import org.apache.cassandra.db.marshal.DateType;
-import org.apache.cassandra.db.marshal.DecimalType;
-import org.apache.cassandra.db.marshal.DoubleType;
-import org.apache.cassandra.db.marshal.EmptyType;
-import org.apache.cassandra.db.marshal.FloatType;
-import org.apache.cassandra.db.marshal.InetAddressType;
-import org.apache.cassandra.db.marshal.Int32Type;
-import org.apache.cassandra.db.marshal.IntegerType;
-import org.apache.cassandra.db.marshal.LexicalUUIDType;
-import org.apache.cassandra.db.marshal.ListType;
-import org.apache.cassandra.db.marshal.LongType;
-import org.apache.cassandra.db.marshal.MapType;
-import org.apache.cassandra.db.marshal.SetType;
-import org.apache.cassandra.db.marshal.TimeUUIDType;
-import org.apache.cassandra.db.marshal.TimestampType;
-import org.apache.cassandra.db.marshal.TupleType;
-import org.apache.cassandra.db.marshal.UTF8Type;
-import org.apache.cassandra.db.marshal.UUIDType;
-import org.apache.cassandra.db.marshal.UserType;
+import org.apache.cassandra.db.marshal.*;
 import org.apache.cassandra.db.rows.Cell;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.exceptions.InvalidRequestException;
+import org.apache.cassandra.locator.InetAddressAndPort;
+import org.apache.cassandra.schema.ColumnMetadata;
+import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.serializers.TimestampSerializer;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -93,20 +70,20 @@ public class CStarUtils {
    * @return never null, left is pkName, right is pkValue
    */
   @Nonnull
-  static List<Pair<String, String>> getPartitionKeys(@Nonnull ByteBuffer rowKey, @Nonnull CFMetaData tableMetadata)
+  static List<Pair<String, String>> getPartitionKeys(@Nonnull ByteBuffer rowKey, @Nonnull TableMetadata tableMetadata)
     throws CharacterCodingException {
     List<Pair<String, String>> partitionKeys = new ArrayList<>(1);
 
-    List<ColumnDefinition> columns = tableMetadata.partitionKeyColumns();
-    ColumnDefinition[] pkColDefinitions = columns.toArray(new ColumnDefinition[columns.size()]);
+    List<ColumnMetadata> columns = tableMetadata.partitionKeyColumns();
+    ColumnMetadata[] pkColDefinitions = columns.toArray(new ColumnMetadata[columns.size()]);
 
-    AbstractType<?> pkValidator = tableMetadata.getKeyValidator();
+    AbstractType<?> pkValidator = tableMetadata.partitionKeyType;
 
     // PK is composite we need to extract sub-keys
     if (pkValidator instanceof CompositeType) {
 
       int pos = 0;
-      for (ByteBuffer key : CompositeType.splitName(rowKey)) {
+      for (ByteBuffer key : CompositeType.splitName(rowKey, ByteBufferAccessor.instance)) {
         CompositeType type = (CompositeType) pkValidator;
         String pkName = ByteBufferUtil.string(pkColDefinitions[pos].name.bytes);
         String pkValue = type.types.get(pos).getString(key);
@@ -116,7 +93,7 @@ public class CStarUtils {
       }
 
     } else { // PK is a single column
-      ColumnDefinition pkDefinition = pkColDefinitions[0];
+      ColumnMetadata pkDefinition = pkColDefinitions[0];
       String pkName = ByteBufferUtil.string(pkDefinition.name.bytes);
       String pkValue = pkValidator.getString(rowKey);
 
@@ -133,11 +110,11 @@ public class CStarUtils {
    * @param keys not null, not empty
    */
   @Nonnull
-  static ByteBuffer getPartitionKeys(@Nonnull String[] keys, @Nonnull CFMetaData tableMetadata) {
-    List<ColumnDefinition> columns = tableMetadata.partitionKeyColumns();
-    ColumnDefinition[] pkColDefinitions = columns.toArray(new ColumnDefinition[columns.size()]);
+  static ByteBuffer getPartitionKeys(@Nonnull String[] keys, @Nonnull TableMetadata tableMetadata) {
+    List<ColumnMetadata> columns = tableMetadata.partitionKeyColumns();
+    ColumnMetadata[] pkColDefinitions = columns.toArray(new ColumnMetadata[columns.size()]);
 
-    AbstractType<?> pkValidator = tableMetadata.getKeyValidator();
+    AbstractType<?> pkValidator = tableMetadata.partitionKeyType;
 
     // PK is composite we need to extract sub-keys
     if (pkValidator instanceof CompositeType) {
@@ -146,7 +123,7 @@ public class CStarUtils {
       Object[] objects = new Object[pkColDefinitions.length];
       int pos = 0;
 
-      for (ColumnDefinition column : columns) {
+      for (ColumnMetadata column : columns) {
         if (column.type.asCQL3Type().equals(CQL3Type.Native.INT)) {
           objects[pos] = Integer.valueOf(keys[pos]);
         } else {
@@ -170,7 +147,7 @@ public class CStarUtils {
   @Nullable
   static String cellValueToString(@Nonnull Cell cell) throws IOException {
     if (cell.isLive(FBUtilities.nowInSeconds())) {
-      return byteBufferToString(cell.column().type, cell.value()).left;
+      return byteBufferToString(cell.column().type, (ByteBuffer) cell.value()).left;
     } else {
       return null;
     }
@@ -345,7 +322,7 @@ public class CStarUtils {
     }
 
     if (cell.isLive(FBUtilities.nowInSeconds())) { // isLive() is better than isTombstone in case of commitlog replay or hints
-      Pair<String, Boolean> pair = byteBufferToString(abstractType, cell.value());
+      Pair<String, Boolean> pair = byteBufferToString(abstractType, (ByteBuffer) cell.value());
       if (pair.right) {
         return CollectionValue.create(key, pair.left, CollectionValue.CollectionType.JSON);
       } else {
@@ -414,11 +391,11 @@ public class CStarUtils {
    * @return Partition keys
    */
   @Nonnull
-  static List<String> getPartitionKeyNames(@Nonnull CFMetaData metadata) throws CharacterCodingException {
-    List<ColumnDefinition> partitionKeys = metadata.partitionKeyColumns();
+  static List<String> getPartitionKeyNames(@Nonnull TableMetadata metadata) throws CharacterCodingException {
+    List<ColumnMetadata> partitionKeys = metadata.partitionKeyColumns();
     List<String> primaryKeys = new ArrayList<>(partitionKeys.size());
 
-    for (ColumnDefinition colDef : partitionKeys) {
+    for (ColumnMetadata colDef : partitionKeys) {
       String keyName = ByteBufferUtil.string(colDef.name.bytes);
       primaryKeys.add(keyName);
     }
@@ -433,11 +410,11 @@ public class CStarUtils {
    * @return Clustering keys, can be empty
    */
   @Nonnull
-  static List<String> getClusteringColumnsNames(@Nonnull CFMetaData metadata) throws CharacterCodingException {
-    List<ColumnDefinition> clusteringColumns = metadata.clusteringColumns();
+  static List<String> getClusteringColumnsNames(@Nonnull TableMetadata metadata) throws CharacterCodingException {
+    List<ColumnMetadata> clusteringColumns = metadata.clusteringColumns();
     List<String> clusteringColumnsNames = new ArrayList<>(clusteringColumns.size());
 
-    for (ColumnDefinition colDef : clusteringColumns) {
+    for (ColumnMetadata colDef : clusteringColumns) {
       String keyName = ByteBufferUtil.string(colDef.name.bytes);
       clusteringColumnsNames.add(keyName);
     }
@@ -454,7 +431,7 @@ public class CStarUtils {
    * @return null if ColumnFamily has no collections, a list else
    */
   @Nullable
-  static List<Pair<String, String>> getClusteringKeys(@Nonnull Row row, @Nonnull CFMetaData tableMetadata,
+  static List<Pair<String, String>> getClusteringKeys(@Nonnull Row row, @Nonnull TableMetadata tableMetadata,
     @Nonnull List<String> clusteringColumnsNames) {
     int clusteringPrefixSize = row.clustering().size();
     if (clusteringPrefixSize > 0) {
@@ -463,7 +440,7 @@ public class CStarUtils {
       for (int prefixNb = 0; prefixNb < clusteringPrefixSize; prefixNb++) {
         String name = clusteringColumnsNames.get(prefixNb);
         AbstractType<?> subtype = tableMetadata.comparator.subtype(prefixNb);
-        ByteBuffer clusteringKeyBytes = row.clustering().get(prefixNb);
+        ByteBuffer clusteringKeyBytes = (ByteBuffer) row.clustering().get(prefixNb);
         String value = subtype.getString(clusteringKeyBytes);
         keys.add(Pair.create(name, value));
       }
@@ -491,25 +468,25 @@ public class CStarUtils {
 
   static boolean isOwner(@Nonnull ColumnFamilyStore cfs, @Nonnull Token token) {
     // Get all live endpoints which was selected to replicate this data
-    List<InetAddress> addresses = StorageService.instance.getLiveNaturalEndpoints(cfs.keyspace, token);
-    Map<String, InetAddress> indexers = new HashMap<>();
+    Set<InetAddressAndPort> addresses = StorageService.instance.getLiveRingMembers();
+    Map<String, InetAddressAndPort> indexers = new HashMap<>();
 
     // Build DC-based map - select only single (first) node to index, because getLiveNaturalEndpoints returns same values for all nodes
-    for (InetAddress address : addresses) {
+    for (InetAddressAndPort address : addresses) {
       String datacenter = DatabaseDescriptor.getEndpointSnitch().getDatacenter(address);
       if (!indexers.containsKey(datacenter)) {
         indexers.put(datacenter, address);
       }
     }
-    return indexers.containsValue(FBUtilities.getBroadcastAddress()); // Current node is not indexer (not first)
+    return indexers.containsValue(FBUtilities.getBroadcastAddressAndPort()); // Current node is not indexer (not first)
   }
 
   public static String getLocalDC() {
-    return DatabaseDescriptor.getEndpointSnitch().getDatacenter(FBUtilities.getBroadcastAddress());
+    return DatabaseDescriptor.getEndpointSnitch().getDatacenter(FBUtilities.getBroadcastAddressAndPort());
   }
 
   public static List<String> getDCs() {
-    Set<InetAddress> addresses = StorageService.instance.getTokenMetadata().getAllEndpoints();
+    Set<InetAddressAndPort> addresses = StorageService.instance.getTokenMetadata().getAllEndpoints();
     return addresses.stream().map(address -> DatabaseDescriptor.getEndpointSnitch().getDatacenter(address)).distinct()
       .collect(Collectors.toList());
   }

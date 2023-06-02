@@ -216,7 +216,7 @@ public class ElasticIndex implements IndexInterface {
       esUrls.add(host);
     }
 
-    int timeout = (int) Math.max(DatabaseDescriptor.getWriteRpcTimeout(), DatabaseDescriptor.getReadRpcTimeout());
+    int timeout = (int) Math.max(DatabaseDescriptor.getWriteRpcTimeout(TimeUnit.MILLISECONDS), DatabaseDescriptor.getReadRpcTimeout(TimeUnit.MILLISECONDS));
     int maxCon = DatabaseDescriptor.getConcurrentWriters() + DatabaseDescriptor.getConcurrentReaders();
 
     LOGGER.info("Request timeout: {}ms, max connections: {}, discovery: {}m", timeout, maxCon, DISCOVERY_FREQ);
