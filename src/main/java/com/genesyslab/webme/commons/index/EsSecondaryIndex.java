@@ -286,7 +286,7 @@ public class EsSecondaryIndex implements Index {
   public Callable<?> getInitializationTask() { //This is done when starting Cassandra or when creating an index with CQL command
     return () -> {
       if (esIndex.isNewIndex()) { //FIXME will this rebuild all data since we only have ssTables for our replicas?
-          new EsIndexBuilder(EsSecondaryIndex.this).build();
+        new EsIndexBuilder(EsSecondaryIndex.this).build();
       }
       return null;
     };
@@ -567,7 +567,7 @@ public class EsSecondaryIndex implements Index {
 
     TableMetadata newMetaData = baseCfs.metadata.get();
     IndexMetadata newIndexMetadata = IndexMetadata.fromSchemaMetadata(indexMetadata.name, indexMetadata.kind, options);
-    newMetaData.indexes.replace(newIndexMetadata);
+    newMetaData.indexes.with(newIndexMetadata);
 
     indexMetadata = newIndexMetadata; //assume update will work, helps for UTs
     //FIXME replace MigrationManager with cassandra 4 alternative

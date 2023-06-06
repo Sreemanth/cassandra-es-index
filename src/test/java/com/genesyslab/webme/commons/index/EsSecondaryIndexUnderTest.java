@@ -99,7 +99,7 @@ public class EsSecondaryIndexUnderTest extends EsSecondaryIndex {
     .addRegularColumn(ES_COL, UTF8Type.instance)
     .build();
 
-  private static final ColumnFamilyStore baseCfs = new ColumnFamilyStore(keyspace, tableName, () -> { return new SequenceBasedSSTableId(1);},
+  private static final ColumnFamilyStore baseCfs = new ColumnFamilyStore(keyspace, tableName, () -> { return new SequenceBasedSSTableId(0);},
           TableMetadataRef.forOfflineTools(cfMetaData), new Directories(cfMetaData), false, false, true);
 
   private static final Map<String, String> options = ImmutableMap.<String, String>builder()
@@ -112,11 +112,14 @@ public class EsSecondaryIndexUnderTest extends EsSecondaryIndex {
 
   static { //Make sure you don't change static block order: this block is just before constructor
     Keyspace.setInitialized();
+    Schema.instance.maybeAddKeyspaceInstance(keyspaceName, () -> keyspace);
     SchemaTestUtils.announceNewKeyspace(keyspace.getMetadata());
+    SchemaTestUtils.announceNewTable(cfMetaData);
+
     ColumnMetadata idxColDef = new ColumnMetadata(cfMetaData, ByteBufferUtil.bytes(ES_COL), UTF8Type.instance, NO_POSITION, REGULAR);
     indexMetadata = IndexMetadata.fromSchemaMetadata(TEST_INDEX, IndexMetadata.Kind.CUSTOM, options);
     cfMetaData.indexes.of(indexMetadata);
-    SchemaTestUtils.announceNewTable(cfMetaData);
+
 
   }
 
