@@ -147,7 +147,12 @@ public class CStarUtils {
   @Nullable
   static String cellValueToString(@Nonnull Cell cell) throws IOException {
     if (cell.isLive(FBUtilities.nowInSeconds())) {
-      return byteBufferToString(cell.column().type, (ByteBuffer) cell.value()).left;
+      if(cell.value() instanceof byte[]){
+        return byteBufferToString(cell.column().type, ByteBuffer.wrap((byte[]) cell.value())).left;
+      } else {
+        return byteBufferToString(cell.column().type, (ByteBuffer) cell.value()).left;
+      }
+
     } else {
       return null;
     }
