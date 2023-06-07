@@ -327,7 +327,13 @@ public class CStarUtils {
     }
 
     if (cell.isLive(FBUtilities.nowInSeconds())) { // isLive() is better than isTombstone in case of commitlog replay or hints
-      Pair<String, Boolean> pair = byteBufferToString(abstractType, (ByteBuffer) cell.value());
+      Pair<String, Boolean> pair = null;
+      if(cell.value() instanceof byte[]){
+         pair = byteBufferToString(abstractType,  ByteBuffer.wrap((byte[]) cell.value()));
+      } else {
+         pair = byteBufferToString(abstractType, (ByteBuffer) cell.value());
+      }
+
       if (pair.right) {
         return CollectionValue.create(key, pair.left, CollectionValue.CollectionType.JSON);
       } else {
