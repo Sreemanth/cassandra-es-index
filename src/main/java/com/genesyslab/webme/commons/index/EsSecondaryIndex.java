@@ -133,8 +133,6 @@ public class EsSecondaryIndex implements Index {
       name = "EsSecondaryIndex [" + baseCfs.metadata.keyspace + "." + this.indexMetadata.name + "]";
       indexConfig = new IndexConfiguration(name, indexMetadata.options);
 
-      LOGGER.info("Creating {} with options {}", name, indexConfig.getIndexOptions());
-
       IndexInterface index;
 
       try {
@@ -192,6 +190,7 @@ public class EsSecondaryIndex implements Index {
 
     try {
       List<Pair<String, String>> partitionKeys = CStarUtils.getPartitionKeys(decoratedKey.getKey(), baseCfs.metadata.get());
+      LOGGER.info("PartitionKeys: {}", partitionKeys);
       List<CellElement> elements = new ArrayList<>();
 
       for (Cell cell : newRow.cells()) {
@@ -199,6 +198,7 @@ public class EsSecondaryIndex implements Index {
 
           // Skip the cells with empty name (row marker) // looks like isEmpty() now (2.2?) returns false with empty string
           String cellName = cell.column().name.toString();
+          LOGGER.info("CellName:{} Cell:{}", cellName, cell);
 
           if (!Strings.isNullOrEmpty(cellName)) {  // Skip the cells with empty name (row marker)
             CellElement element = new CellElement();
@@ -223,10 +223,10 @@ public class EsSecondaryIndex implements Index {
         LOGGER.debug("{} skip empty update for row {}", name, id);
 
       } else {
-        if (DEBUG_SHOW_VALUES) {
-          LOGGER.debug("{} indexing row {} content:{}", name, id, newRow);
+        if (true) {
+          LOGGER.info("{} indexing row {} content:{}", name, id, newRow);
         } else {
-          LOGGER.debug("{} indexing row {}", name, id);
+          LOGGER.info("{} indexing row {}", name, id);
         }
 
         Tracing.trace("ESI writing {} to ES index", id);

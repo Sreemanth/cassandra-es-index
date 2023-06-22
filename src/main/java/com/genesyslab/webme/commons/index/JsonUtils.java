@@ -137,7 +137,9 @@ public class JsonUtils {
     builder.writeStartObject();
 
     for (Map.Entry<String, String> entry : mapValue.entrySet()) {
-      builder.writeStringField(entry.getKey(), entry.getValue());
+      if(entry.getValue() != null){
+        builder.writeStringField(entry.getKey(), entry.getValue());
+      }
     }
 
     builder.writeEndObject();

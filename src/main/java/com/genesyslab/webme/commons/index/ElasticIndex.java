@@ -21,10 +21,26 @@ import com.genesyslab.webme.commons.index.requests.ElasticClientFactory;
 import com.genesyslab.webme.commons.index.requests.GenericRequest;
 import com.genesyslab.webme.commons.index.requests.ResponseHandler;
 import com.genesyslab.webme.commons.index.requests.UpdatePipeline;
-
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-
+import io.searchbox.action.Action;
+import io.searchbox.client.JestClient;
+import io.searchbox.client.JestClientFactory;
+import io.searchbox.client.JestResult;
+import io.searchbox.client.config.HttpClientConfig;
+import io.searchbox.cluster.Health;
+import io.searchbox.core.*;
+import io.searchbox.indices.CreateIndex;
+import io.searchbox.indices.DeleteIndex;
+import io.searchbox.indices.Flush;
+import io.searchbox.indices.IndicesExists;
+import io.searchbox.indices.aliases.AddAliasMapping;
+import io.searchbox.indices.aliases.AliasMapping;
+import io.searchbox.indices.aliases.GetAliases;
+import io.searchbox.indices.aliases.ModifyAliases;
+import io.searchbox.indices.mapping.GetMapping;
+import io.searchbox.indices.mapping.PutMapping;
+import io.searchbox.indices.settings.UpdateSettings;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.exceptions.CassandraException;
 import org.apache.cassandra.exceptions.ConfigurationException;
@@ -44,36 +60,8 @@ import org.codehaus.jackson.map.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.searchbox.action.Action;
-import io.searchbox.client.JestClient;
-import io.searchbox.client.JestClientFactory;
-import io.searchbox.client.JestResult;
-import io.searchbox.client.config.HttpClientConfig;
-import io.searchbox.cluster.Health;
-import io.searchbox.core.Count;
-import io.searchbox.core.CountResult;
-import io.searchbox.core.Delete;
-import io.searchbox.core.DeleteByQuery;
-import io.searchbox.core.DocumentResult;
-import io.searchbox.core.Index;
-import io.searchbox.core.Search;
-import io.searchbox.core.Update;
-import io.searchbox.core.Validate;
-import io.searchbox.indices.CreateIndex;
-import io.searchbox.indices.DeleteIndex;
-import io.searchbox.indices.Flush;
-import io.searchbox.indices.IndicesExists;
-import io.searchbox.indices.aliases.AddAliasMapping;
-import io.searchbox.indices.aliases.AliasMapping;
-import io.searchbox.indices.aliases.GetAliases;
-import io.searchbox.indices.aliases.ModifyAliases;
-import io.searchbox.indices.mapping.GetMapping;
-import io.searchbox.indices.mapping.PutMapping;
-import io.searchbox.indices.settings.UpdateSettings;
-
 import javax.annotation.Nonnull;
 import javax.net.ssl.SSLContext;
-
 import java.io.IOException;
 import java.io.StringWriter;
 import java.lang.reflect.Constructor;
@@ -81,14 +69,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -459,8 +440,9 @@ public class ElasticIndex implements IndexInterface {
 
   private void indexInternal(List<Pair<String, String>> partitionKeys, List<CellElement> elements, long expirationTime)
     throws IOException {
-
+    LOGGER.info("IndexInternal - Partition Keys: {}, Elements: {}", partitionKeys, elements);
     Map<String, List<CellElement>> groupedMap = group(partitionKeys, elements);
+    LOGGER.info("GroupedMap: {}", groupedMap);
 
     for (Map.Entry<String, List<CellElement>> entry : groupedMap.entrySet()) {
       update(partitionKeys, entry.getKey(), entry.getValue(), expirationTime);
@@ -529,28 +511,35 @@ public class ElasticIndex implements IndexInterface {
 
       if (collections != null) {
         // Fill the collections now that they are sorted
+        boolean collectionNameStarted = false;
         for (Map.Entry<CellElement, Map<String, String>> collection : collections.entrySet()) {
           CellElement element = collection.getKey();
-
+          if(!collectionNameStarted){
+            builder.writeArrayFieldStart(element.name);
+            collectionNameStarted = true;
+          }
+          LOGGER.info("Update Index- CellElement: {}", element);
           if (element.collectionValue != null) {
             switch (element.collectionValue.type) {
               case JSON:
-                builder.writeObjectFieldStart(element.name);
-
+//                builder.writeStartObject();
+                LOGGER.info("JSON Type- collectionValueEntrySet:{}", collection.getValue().entrySet());
                 for (Map.Entry<String, String> en : collection.getValue().entrySet()) {
                   String value = en.getValue();
                   if (value == null) {
-                    builder.writeNullField(en.getKey());
+//                    builder.writeNullField(en.getKey());
                   } else {
-                    builder.writeFieldName(en.getKey());
+                    LOGGER.info("JSON Type Key: {}, Value: {}", en.getKey(),value);
+                    //builder.writeFieldName(en.getKey());
                     builder.writeRawValue(value);
                   }
                 }
-                builder.writeEndObject();
+//                builder.writeEndObject();
                 break;
 
               case MAP:
-                builder.writeObjectFieldStart(element.name);
+                builder.writeStartObject();
+                LOGGER.info("Map Type collectionValueEntrySet: {}", collection.getValue().entrySet());
                 for (Map.Entry<String, String> entry : collection.getValue().entrySet()) {
                   builder.writeStringField(entry.getKey(), entry.getValue());
                 }
@@ -559,7 +548,8 @@ public class ElasticIndex implements IndexInterface {
 
               case LIST:
               case SET:
-                builder.writeArrayFieldStart(element.name);
+                builder.writeStartArray();
+                LOGGER.info("LIST-SET Type collectionValueKeySet: {}", collection.getValue().keySet());
                 for (String value : collection.getValue().keySet()) {
                   builder.writeString(value);
                 }
@@ -570,6 +560,9 @@ public class ElasticIndex implements IndexInterface {
                 // There is no other CollectionType
             }
           }
+        }
+        if(collectionNameStarted){
+          builder.writeEndArray();
         }
       }
 
@@ -584,10 +577,10 @@ public class ElasticIndex implements IndexInterface {
       builder.writeEndObject();
       builder.close(); // calling close() early because we want the output now
       String jsonDoc = stringWriter.toString();
-
-      if (EsSecondaryIndex.DEBUG_SHOW_VALUES) {
+      //EsSecondaryIndex.DEBUG_SHOW_VALUES
+      if (true) {
         String operation = (insertOnly || usePipeline) ? "insert" : "upsert";
-        LOGGER.debug("Document {} index {} {} with content {}", typeName, operation, docId, jsonDoc);
+        LOGGER.info("Document {} index {} {} with content {}", typeName, operation, docId, jsonDoc);
       }
 
       String currentName = indexManager.getCurrentName();

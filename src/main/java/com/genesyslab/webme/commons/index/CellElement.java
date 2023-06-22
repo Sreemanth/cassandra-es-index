@@ -57,6 +57,16 @@ public class CellElement {
     return other instanceof CellElement && other.hashCode() == hashCode();
   }
 
+  @Override
+  public String toString() {
+    return "CellElement{" +
+            "clusteringKeys=" + clusteringKeys +
+            ", name='" + name + '\'' +
+            ", value='" + value + '\'' +
+            ", collectionValue=" + collectionValue +
+            '}';
+  }
+
   public static class CollectionValue {
     String name;
     String value;
@@ -80,6 +90,17 @@ public class CellElement {
       SET,
       LIST
     }
+
+    @Override
+    public String toString() {
+      return "CollectionValue{" +
+              "name='" + name + '\'' +
+              ", value='" + value + '\'' +
+              ", type=" + type +
+              '}';
+    }
   }
+
+
 
 }

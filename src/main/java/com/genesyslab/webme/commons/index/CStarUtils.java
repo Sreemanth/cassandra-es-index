@@ -37,6 +37,8 @@ import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -60,6 +62,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * Created by Jacques-Henri Berthemet on 10/24/2014. Some utils to process Cassandra CFs
  */
 public class CStarUtils {
+
+  public static final Logger LOGGER = LoggerFactory.getLogger(CStarUtils.class);
 
   /**
    * Convert a rowKey to a map of column names and put corresponding values in the map. It includes
@@ -309,6 +313,8 @@ public class CStarUtils {
 
     final AbstractType<?> abstractType = cell.column().type;
 
+
+
     if (abstractType instanceof MapType) {
       colType = CollectionValue.CollectionType.MAP;
       AbstractType keyType = ((MapType) abstractType).getKeysType();
@@ -325,10 +331,13 @@ public class CStarUtils {
     } else {
       throw new IOException("Unsupported Collection type:" + abstractType);
     }
+    LOGGER.info("Column Type:{} , Key:{}, Cell: {}", colType.name(), key, cell);
 
     if (cell.isLive(FBUtilities.nowInSeconds())) { // isLive() is better than isTombstone in case of commitlog replay or hints
       Pair<String, Boolean> pair = null;
       if(cell.value() instanceof byte[]){
+        LOGGER.info("Cell value {}, string representation: {}", cell.value(), new String((byte[])cell.value(),
+                0, ((byte[]) cell.value()).length, "UTF-8"));
          pair = byteBufferToString(abstractType,  ByteBuffer.wrap((byte[]) cell.value()));
       } else {
          pair = byteBufferToString(abstractType, (ByteBuffer) cell.value());
