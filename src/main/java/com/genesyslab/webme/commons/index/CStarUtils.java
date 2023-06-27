@@ -32,8 +32,10 @@ import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.serializers.MarshalException;
 import org.apache.cassandra.serializers.TimestampSerializer;
 import org.apache.cassandra.service.StorageService;
+import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
@@ -151,12 +153,7 @@ public class CStarUtils {
   @Nullable
   static String cellValueToString(@Nonnull Cell cell) throws IOException {
     if (cell.isLive(FBUtilities.nowInSeconds())) {
-      if(cell.value() instanceof byte[]){
-        return byteBufferToString(cell.column().type, ByteBuffer.wrap((byte[]) cell.value())).left;
-      } else {
-        return byteBufferToString(cell.column().type, (ByteBuffer) cell.value()).left;
-      }
-
+      return byteBufferToString(cell.column().type, cell.buffer()).left;
     } else {
       return null;
     }
@@ -174,128 +171,140 @@ public class CStarUtils {
   private static Pair<String, Boolean> byteBufferToString(@Nonnull AbstractType<?> abstractType, @Nullable ByteBuffer value)
     throws IOException {
 
-    if (value == null) {
-      return Pair.create(null, Boolean.FALSE);
+    LOGGER.info("AbstractType:{}, HexValue: {}", abstractType.toString(), value != null ? ByteBufferUtil.bytesToHex(value.duplicate()) : "null");
+    try{
+      if (value == null) {
+        return Pair.create(null, Boolean.FALSE);
 
-    } else if (abstractType instanceof UTF8Type) {
+      } else if (abstractType instanceof UTF8Type) {
 
-      UTF8Type type = (UTF8Type) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+        UTF8Type type = (UTF8Type) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof AsciiType) {
+      } else if (abstractType instanceof AsciiType) {
 
-      AsciiType type = (AsciiType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+        AsciiType type = (AsciiType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof TimestampType) {
-      Date date = TimestampSerializer.instance.deserialize(value);
-      return Pair.create(JsonUtils.getIso8601Date(date), Boolean.FALSE);
+      } else if (abstractType instanceof TimestampType) {
+        Date date = TimestampSerializer.instance.deserialize(value);
+        return Pair.create(JsonUtils.getIso8601Date(date), Boolean.FALSE);
 
-    } else if (abstractType instanceof DateType) {
-      DateType type = (DateType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof DateType) {
+        DateType type = (DateType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof UUIDType) {
-      UUIDType type = (UUIDType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof UUIDType) {
+        UUIDType type = (UUIDType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof LexicalUUIDType) {
-      LexicalUUIDType type = (LexicalUUIDType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof LexicalUUIDType) {
+        LexicalUUIDType type = (LexicalUUIDType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof TimeUUIDType) {
-      TimeUUIDType type = (TimeUUIDType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof TimeUUIDType) {
+        TimeUUIDType type = (TimeUUIDType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof DoubleType) {
-      DoubleType type = (DoubleType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof DoubleType) {
+        DoubleType type = (DoubleType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof FloatType) {
-      FloatType type = (FloatType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof FloatType) {
+        FloatType type = (FloatType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof InetAddressType) {
-      InetAddressType type = (InetAddressType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof InetAddressType) {
+        InetAddressType type = (InetAddressType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof DecimalType) {
-      DecimalType type = (DecimalType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof DecimalType) {
+        DecimalType type = (DecimalType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof Int32Type) {
-      Int32Type type = (Int32Type) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof Int32Type) {
+        Int32Type type = (Int32Type) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof IntegerType) {
-      IntegerType type = (IntegerType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof IntegerType) {
+        IntegerType type = (IntegerType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof LongType) {
-      LongType type = (LongType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof LongType) {
+        LongType type = (LongType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof CounterColumnType) {
-      CounterColumnType type = (CounterColumnType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof CounterColumnType) {
+        CounterColumnType type = (CounterColumnType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof BooleanType) {
-      BooleanType type = (BooleanType) abstractType;
-      return Pair.create(type.getString(value), Boolean.FALSE);
+      } else if (abstractType instanceof BooleanType) {
+        BooleanType type = (BooleanType) abstractType;
+        return Pair.create(type.getString(value), Boolean.FALSE);
 
-    } else if (abstractType instanceof UserType) {
-      UserType type = (UserType) abstractType;
+      } else if (abstractType instanceof UserType) {
+        UserType type = (UserType) abstractType;
 
-      Map<String, String> mapValue = new HashMap<>();
+        Map<String, String> mapValue = new HashMap<>();
 
-      ByteBuffer[] values = type.split(value);
-      for (int i = 0; i < values.length; i++) {
-        ByteBuffer fieldNameBytes = type.fieldName(i).bytes;
-        AbstractType<?> fieldValueType = type.fieldType(i);
-        ByteBuffer fieldValueBytes = values[i];
+        ByteBuffer[] values = type.split(value);
+        for (int i = 0; i < values.length; i++) {
+          ByteBuffer fieldNameBytes = type.fieldName(i).bytes;
+          AbstractType<?> fieldValueType = type.fieldType(i);
+          ByteBuffer fieldValueBytes = values[i];
 
-        String fieldName = ByteBufferUtil.string(fieldNameBytes);
-        String valueString = byteBufferToString(fieldValueType, fieldValueBytes).left;
+          String fieldName = ByteBufferUtil.string(fieldNameBytes);
+          String valueString = byteBufferToString(fieldValueType, fieldValueBytes).left;
 
-        mapValue.put(fieldName, valueString);
+          mapValue.put(fieldName, valueString);
+        }
+
+        return Pair.create(JsonUtils.stringMapToJson(mapValue), Boolean.TRUE);
+
+      } else if (abstractType instanceof TupleType) {
+        TupleType type = (TupleType) abstractType;
+        ByteBuffer[] values = type.split(value);
+
+        List<String> arrayList = new ArrayList<>(values.length);
+
+        for (int i = 0; i < values.length; i++) {
+          AbstractType<?> tupleValueType = type.type(i);
+          arrayList.add(byteBufferToString(tupleValueType, values[i]).left);
+        }
+
+        return Pair.create(JsonUtils.collectionToArray(arrayList), Boolean.TRUE);
+
+      } else if (abstractType instanceof MapType) {
+        MapType<?, ?> type = (MapType<?, ?>) abstractType;
+        AbstractType<?> valueType = type.getValuesType();
+        return byteBufferToString(valueType, value);
+
+      } else if (abstractType instanceof SetType) {
+        SetType<?> type = (SetType<?>) abstractType;
+        AbstractType<?> valueType = type.valueComparator();
+        return byteBufferToString(valueType, value);
+
+      } else if (abstractType instanceof ListType) {
+        ListType<?> type = (ListType<?>) abstractType;
+        AbstractType<?> valueType = type.valueComparator();
+        if(valueType instanceof UserType){
+          return byteBufferToString(valueType, value);
+        } else {
+          return Pair.create(type.toJSONString(value, ProtocolVersion.CURRENT), Boolean.FALSE);
+        }
+
+      } else if (abstractType instanceof BytesType) {
+        return Pair.create(value.remaining() + " bytes", Boolean.FALSE);
+
+      } else if (abstractType instanceof EmptyType) {
+        return Pair.create("", Boolean.FALSE);
       }
-
-      return Pair.create(JsonUtils.stringMapToJson(mapValue), Boolean.TRUE);
-
-    } else if (abstractType instanceof TupleType) {
-      TupleType type = (TupleType) abstractType;
-      ByteBuffer[] values = type.split(value);
-
-      List<String> arrayList = new ArrayList<>(values.length);
-
-      for (int i = 0; i < values.length; i++) {
-        AbstractType<?> tupleValueType = type.type(i);
-        arrayList.add(byteBufferToString(tupleValueType, values[i]).left);
-      }
-
-      return Pair.create(JsonUtils.collectionToArray(arrayList), Boolean.TRUE);
-
-    } else if (abstractType instanceof MapType) {
-      MapType<?, ?> type = (MapType<?, ?>) abstractType;
-      AbstractType<?> valueType = type.getValuesType();
-      return byteBufferToString(valueType, value);
-
-    } else if (abstractType instanceof SetType) {
-      SetType<?> type = (SetType<?>) abstractType;
-      AbstractType<?> valueType = type.valueComparator();
-      return byteBufferToString(valueType, value);
-
-    } else if (abstractType instanceof ListType) {
-      ListType<?> type = (ListType<?>) abstractType;
-      AbstractType<?> valueType = type.valueComparator();
-      return byteBufferToString(valueType, value);
-
-    } else if (abstractType instanceof BytesType) {
-      return Pair.create(value.remaining() + " bytes", Boolean.FALSE);
-
-    } else if (abstractType instanceof EmptyType) {
+    } catch(MarshalException e){
+      LOGGER.error("Error in byteBuffer to string:", e);
+      LOGGER.info("Type: {}, HexValue:{}, StringValue: {}, bytes: {}", abstractType.toString(),  ByteBufferUtil.bytesToHex(value.duplicate()), ByteBufferUtil.string(value.duplicate()), value.duplicate().toString());
       return Pair.create("", Boolean.FALSE);
     }
+
 
     throw new IOException("Unsupported type:" + abstractType);
   }
@@ -338,11 +347,11 @@ public class CStarUtils {
       if(cell.value() instanceof byte[]){
         LOGGER.info("Cell value {}, string representation: {}", cell.value(), new String((byte[])cell.value(),
                 0, ((byte[]) cell.value()).length, "UTF-8"));
-         pair = byteBufferToString(abstractType,  ByteBuffer.wrap((byte[]) cell.value()));
+         pair = byteBufferToString(abstractType,  cell.buffer());
       } else {
-         pair = byteBufferToString(abstractType, (ByteBuffer) cell.value());
+         pair = byteBufferToString(abstractType, cell.buffer());
       }
-
+      LOGGER.info("Pair : {}", pair);
       if (pair.right) {
         return CollectionValue.create(key, pair.left, CollectionValue.CollectionType.JSON);
       } else {
