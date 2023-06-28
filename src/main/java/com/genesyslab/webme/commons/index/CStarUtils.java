@@ -153,7 +153,12 @@ public class CStarUtils {
   @Nullable
   static String cellValueToString(@Nonnull Cell cell) throws IOException {
     if (cell.isLive(FBUtilities.nowInSeconds())) {
-      return byteBufferToString(cell.column().type, cell.buffer()).left;
+      if(byteBufferToString(cell.column().type, cell.buffer()).left != null){
+        return byteBufferToString(cell.column().type, cell.buffer()).left.toString();
+      } else {
+        return (String)byteBufferToString(cell.column().type, cell.buffer()).left;
+      }
+
     } else {
       return null;
     }
@@ -168,7 +173,7 @@ public class CStarUtils {
    * @throws IOException if type is unknown
    */
   @Nonnull
-  private static Pair<String, Boolean> byteBufferToString(@Nonnull AbstractType<?> abstractType, @Nullable ByteBuffer value)
+  private static Pair<Object, Boolean> byteBufferToString(@Nonnull AbstractType<?> abstractType, @Nullable ByteBuffer value)
     throws IOException {
 
     LOGGER.info("AbstractType:{}, HexValue: {}", abstractType.toString(), value != null ? ByteBufferUtil.bytesToHex(value.duplicate()) : "null");
@@ -245,7 +250,7 @@ public class CStarUtils {
       } else if (abstractType instanceof UserType) {
         UserType type = (UserType) abstractType;
 
-        Map<String, String> mapValue = new HashMap<>();
+        Map<String, Object> mapValue = new HashMap<>();
 
         ByteBuffer[] values = type.split(value);
         for (int i = 0; i < values.length; i++) {
@@ -254,7 +259,7 @@ public class CStarUtils {
           ByteBuffer fieldValueBytes = values[i];
 
           String fieldName = ByteBufferUtil.string(fieldNameBytes);
-          String valueString = byteBufferToString(fieldValueType, fieldValueBytes).left;
+          Object valueString = byteBufferToString(fieldValueType, fieldValueBytes).left;
 
           mapValue.put(fieldName, valueString);
         }
@@ -265,7 +270,7 @@ public class CStarUtils {
         TupleType type = (TupleType) abstractType;
         ByteBuffer[] values = type.split(value);
 
-        List<String> arrayList = new ArrayList<>(values.length);
+        List<Object> arrayList = new ArrayList<>(values.length);
 
         for (int i = 0; i < values.length; i++) {
           AbstractType<?> tupleValueType = type.type(i);
@@ -290,7 +295,8 @@ public class CStarUtils {
         if(valueType instanceof UserType){
           return byteBufferToString(valueType, value);
         } else {
-          return Pair.create(type.toJSONString(value, ProtocolVersion.CURRENT), Boolean.FALSE);
+          LOGGER.info("List deserialize : {}", type.serializer.deserialize(value.duplicate()));
+          return Pair.create(type.serializer.deserialize(value), Boolean.FALSE);
         }
 
       } else if (abstractType instanceof BytesType) {
@@ -327,8 +333,7 @@ public class CStarUtils {
     if (abstractType instanceof MapType) {
       colType = CollectionValue.CollectionType.MAP;
       AbstractType keyType = ((MapType) abstractType).getKeysType();
-      key = byteBufferToString(keyType, cell.path().get(0)).left; // cell path contains map key name
-
+        key = byteBufferToString(keyType, cell.path().get(0)).left.toString(); // cell path contains map key name
     } else if (abstractType instanceof SetType) {
       colType = CollectionValue.CollectionType.SET;
       key = ((SetType) abstractType).nameComparator().getString(cell.path().get(0)); // cell path contains set item value
@@ -343,7 +348,7 @@ public class CStarUtils {
     LOGGER.info("Column Type:{} , Key:{}, Cell: {}", colType.name(), key, cell);
 
     if (cell.isLive(FBUtilities.nowInSeconds())) { // isLive() is better than isTombstone in case of commitlog replay or hints
-      Pair<String, Boolean> pair = null;
+      Pair<Object, Boolean> pair = null;
       if(cell.value() instanceof byte[]){
         LOGGER.info("Cell value {}, string representation: {}", cell.value(), new String((byte[])cell.value(),
                 0, ((byte[]) cell.value()).length, "UTF-8"));

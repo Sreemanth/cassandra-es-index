@@ -463,7 +463,7 @@ public class ElasticIndex implements IndexInterface {
 
       boolean clusteringKeysSet = false;
 
-      Map<CellElement, Map<String, String>> collections = null;
+      Map<CellElement, Map<String, Object>> collections = null;
 
       // Fill simple fields and map complex types
       for (CellElement element : elements) {
@@ -512,7 +512,7 @@ public class ElasticIndex implements IndexInterface {
       if (collections != null) {
         // Fill the collections now that they are sorted
         boolean collectionNameStarted = false;
-        for (Map.Entry<CellElement, Map<String, String>> collection : collections.entrySet()) {
+        for (Map.Entry<CellElement, Map<String, Object>> collection : collections.entrySet()) {
           CellElement element = collection.getKey();
           if(!collectionNameStarted){
             builder.writeArrayFieldStart(element.name);
@@ -524,14 +524,19 @@ public class ElasticIndex implements IndexInterface {
               case JSON:
 //                builder.writeStartObject();
                 LOGGER.info("JSON Type- collectionValueEntrySet:{}", collection.getValue().entrySet());
-                for (Map.Entry<String, String> en : collection.getValue().entrySet()) {
-                  String value = en.getValue();
+                for (Map.Entry<String, Object> en : collection.getValue().entrySet()) {
+                  Object value = en.getValue();
                   if (value == null) {
 //                    builder.writeNullField(en.getKey());
                   } else {
                     LOGGER.info("JSON Type Key: {}, Value: {}", en.getKey(),value);
                     //builder.writeFieldName(en.getKey());
-                    builder.writeRawValue(value);
+                    if(value instanceof String){
+                      builder.writeRawValue((String) value);
+                    } else {
+                      builder.writeObject(value);
+                    }
+
                   }
                 }
 //                builder.writeEndObject();
@@ -540,8 +545,13 @@ public class ElasticIndex implements IndexInterface {
               case MAP:
                 builder.writeStartObject();
                 LOGGER.info("Map Type collectionValueEntrySet: {}", collection.getValue().entrySet());
-                for (Map.Entry<String, String> entry : collection.getValue().entrySet()) {
-                  builder.writeStringField(entry.getKey(), entry.getValue());
+                for (Map.Entry<String, Object> entry : collection.getValue().entrySet()) {
+                  if( entry.getValue() instanceof String){
+                    builder.writeStringField(entry.getKey(), (String) entry.getValue());
+                  } else {
+                    builder.writeObjectField(entry.getKey(), entry.getValue());
+                  }
+
                 }
                 builder.writeEndObject();
                 break;

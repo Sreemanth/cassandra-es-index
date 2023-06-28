@@ -69,11 +69,11 @@ public class CellElement {
 
   public static class CollectionValue {
     String name;
-    String value;
+    Object value;
     CollectionType type;
 
     @Nonnull
-    public static CollectionValue create(@Nonnull String name, @Nullable String value, @Nonnull CollectionType type) {
+    public static CollectionValue create(@Nonnull String name, @Nullable Object value, @Nonnull CollectionType type) {
       CollectionValue val = new CollectionValue();
       val.name = name;
       val.value = value;
