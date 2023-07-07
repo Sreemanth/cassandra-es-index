@@ -109,6 +109,7 @@ public class StreamingPartitionIterator implements UnfilteredPartitionIterator {
 
   @Override
   public UnfilteredRowIterator next() {
+    LOGGER.info("Next method:", esResultIterator);
     JsonObject jsonMetadata = null;
     RowIterator rowIterator = null;
     Row row = null;

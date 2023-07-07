@@ -661,7 +661,7 @@ public class ElasticIndex implements IndexInterface {
   public SearchResult search(@Nonnull QueryMetaData queryMetaData) {
     String queryString = queryMetaData.query;
 
-    LOGGER.trace("Index {} search with query {}", typeName, queryString);
+    LOGGER.info("Index {} search with query {}", typeName, queryString);
 
     if (!queryString.startsWith(JSON_PREFIX)) {
       queryString = String.format(QUERY_WRAPPER_WITH_SIZE, maxResults, escape(queryString));
@@ -677,7 +677,7 @@ public class ElasticIndex implements IndexInterface {
       throw new InvalidRequestException(e.getMessage());
     }
 
-    LOGGER.trace("Index {} search result: {}", typeName, searchResponse);
+    LOGGER.info("Index {} search result: {}", typeName, searchResponse);
 
     final List<SearchResultRow> idList = new ArrayList<>();
 
@@ -728,7 +728,7 @@ public class ElasticIndex implements IndexInterface {
     try {
       return mapper.readTree(query).get("query").toString();
     } catch (Exception e) {
-      LOGGER.trace("Could not extract query node from '{}' for Index {}", query, indexManager.getAliasName());
+      LOGGER.info("Could not extract query node from '{}' for Index {}", query, indexManager.getAliasName());
     }
     return query;
   }
@@ -738,7 +738,7 @@ public class ElasticIndex implements IndexInterface {
     if (!isValidateQuery) {
       return;
     }
-    LOGGER.trace("Validating query {}", query);
+    LOGGER.info("Validating query {}", query);
 
     String esQuery = query;
 
@@ -762,7 +762,7 @@ public class ElasticIndex implements IndexInterface {
       formattedQuery = String.format(QUERY_WRAPPER_WITH_QUOTES, esQuery);
     }
 
-    LOGGER.trace("Validating query {}", formattedQuery);
+    LOGGER.info("Validating query {}", formattedQuery);
     try {
       Validate.Builder validateBuilder = new Validate.Builder(formattedQuery);
       validateBuilder.setParameter(EXPLAIN, String.valueOf(true));
@@ -773,7 +773,7 @@ public class ElasticIndex implements IndexInterface {
       } else {
         String valid = res.getJsonObject().get("valid").getAsString();
         if (Boolean.parseBoolean(valid)) {
-          LOGGER.trace("Query {} is valid", formattedQuery);
+          LOGGER.info("Query {} is valid", formattedQuery);
         } else {
           throw new InvalidRequestException(res.getJsonObject().toString());
         }
